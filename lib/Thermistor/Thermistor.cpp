@@ -39,7 +39,7 @@
 #define TEMPERATURENOMINAL 25
 
 // Number of ADC samples
-#define NUMSAMPLES         5 
+#define NUMSAMPLES 5
 
 // ADC resolution
 #if defined(PANSTAMP_NRG) || defined(ESP_PLATFORM)
@@ -58,7 +58,7 @@
  * @param bCoef beta coefficient of the thermistor
  * @param serialRes Value of the serial resistor
  */
-THERMISTOR::THERMISTOR(uint8_t adcPin, uint16_t nomRes, uint16_t bCoef, uint16_t serialRes) 
+THERMISTOR::THERMISTOR(uint8_t adcPin, uint16_t nomRes, uint16_t bCoef, uint16_t serialRes)
 {
   analogPin = adcPin;
   nominalResistance = nomRes;
@@ -79,12 +79,12 @@ int THERMISTOR::read(void)
   uint16_t sample;
   float average = 0;
 
-  #ifndef ESP_PLATFORM
+#ifndef ESP_PLATFORM
   analogReference(DEFAULT);
-  #endif
+#endif
 
   // take N samples in a row, with a slight delay
-  for (i=0; i< NUMSAMPLES; i++)
+  for (i = 0; i < NUMSAMPLES; i++)
   {
     sample = analogRead(analogPin);
     average += sample;
@@ -92,37 +92,37 @@ int THERMISTOR::read(void)
   }
   average /= NUMSAMPLES;
 
-  #ifdef VERBOSE_SENSOR_ENABLED  
-  Serial.print("Average analog reading "); 
+#ifdef VERBOSE_SENSOR_ENABLED
+  Serial.print("Average analog reading ");
   Serial.println(average);
-  #endif
- 
+#endif
+
   // convert the value to resistance
   average = ADC_RESOLUTION / average - 1;
   average = serialResistance * average;
 
-  #ifdef VERBOSE_SENSOR_ENABLED
-  Serial.print("Thermistor resistance "); 
+#ifdef VERBOSE_SENSOR_ENABLED
+  Serial.print("Thermistor resistance ");
   Serial.println(average);
-  #endif
- 
+#endif
+
   float steinhart;
-  steinhart = average / nominalResistance;     // (R/Ro)
-  #ifdef PANSTAMP_NRG
-  steinhart = logf(steinhart);                 // ln(R/Ro)
-  #else
-  steinhart = log(steinhart);                  // ln(R/Ro)
-  #endif
-  steinhart /= bCoefficient;                   // 1/B * ln(R/Ro)
+  steinhart = average / nominalResistance; // (R/Ro)
+#ifdef PANSTAMP_NRG
+  steinhart = logf(steinhart); // ln(R/Ro)
+#else
+  steinhart = log(steinhart); // ln(R/Ro)
+#endif
+  steinhart /= bCoefficient;                        // 1/B * ln(R/Ro)
   steinhart += 1.0 / (TEMPERATURENOMINAL + 273.15); // + (1/To)
-  steinhart = 1.0 / steinhart;                 // Invert
-  steinhart -= 273.15;                         // convert to C
- 
-  #ifdef VERBOSE_SENSOR_ENABLED
-  Serial.print("Temperature "); 
+  steinhart = 1.0 / steinhart;                      // Invert
+  steinhart -= 273.15;                              // convert to C
+
+#ifdef VERBOSE_SENSOR_ENABLED
+  Serial.print("Temperature ");
   Serial.print(steinhart);
   Serial.println(" *C");
-  #endif
-  
+#endif
+
   return steinhart;
 }

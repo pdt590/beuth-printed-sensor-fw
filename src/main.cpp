@@ -26,43 +26,47 @@
 #include <BLE2902.h>
 #include "Thermistor.h"
 
-BLEServer* pServer = NULL;
-BLECharacteristic* pCharacteristic = NULL;
+BLEServer *pServer = NULL;
+BLECharacteristic *pCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define ms_TO_S_FACTOR 1000 /* Conversion factor for mili seconds to seconds */
-#define TIME_INTERVAL  3 /* Time interval ESP32 will send data and repeat (in seconds) */
+#define TIME_INTERVAL 3     /* Time interval ESP32 will send data and repeat (in seconds) */
 #define SENSOR_PIN 36
 
-class MyServerCallbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-      deviceConnected = true;
-      Serial.println("[INFO] deviceConnected");
-    };
+class MyServerCallbacks : public BLEServerCallbacks
+{
+  void onConnect(BLEServer *pServer)
+  {
+    deviceConnected = true;
+    Serial.println("[INFO] deviceConnected");
+  };
 
-    void onDisconnect(BLEServer* pServer) {
-      deviceConnected = false;
-      Serial.println("[INFO] deviceDisconnected");
-    }
+  void onDisconnect(BLEServer *pServer)
+  {
+    deviceConnected = false;
+    Serial.println("[INFO] deviceDisconnected");
+  }
 };
 
 /*
   Thermistor sensor initializes
 */
-THERMISTOR thermistor(SENSOR_PIN,        // Analog pin
-                      10000,          // Nominal resistance at 25 ºC
-                      3950,           // thermistor's beta coefficient
-                      10000);         // Value of the series resistor
+THERMISTOR thermistor(SENSOR_PIN, // Analog pin
+                      10000,      // Nominal resistance at 25 ºC
+                      3950,       // thermistor's beta coefficient
+                      10000);     // Value of the series resistor
 // Global temperature reading
 float temp;
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
 
   // Create the BLE Device
@@ -79,12 +83,11 @@ void setup() {
 
   // Create a BLE Characteristic
   pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_WRITE  |
-                      BLECharacteristic::PROPERTY_NOTIFY |
-                      BLECharacteristic::PROPERTY_INDICATE
-                    );
+      CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE |
+          BLECharacteristic::PROPERTY_NOTIFY |
+          BLECharacteristic::PROPERTY_INDICATE);
 
   // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
   // Create a BLE Descriptor
@@ -97,32 +100,35 @@ void setup() {
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(false);
-  pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
+  pAdvertising->setMinPreferred(0x0); // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
   Serial.println("[INFO] waiting a client connection to notify...");
 }
 
-void loop() {
-    
-      // notify changed value
-      if (deviceConnected) {
-        temp = thermistor.read();
-        pCharacteristic->setValue(temp);
-        pCharacteristic->notify();
-        Serial.println("[INFO] sent data");
-        delay(TIME_INTERVAL * ms_TO_S_FACTOR);
-      }
-      // disconnecting
-      if (!deviceConnected && oldDeviceConnected) {
-        delay(500); // give the bluetooth stack the chance to get things ready
-        pServer->startAdvertising(); // restart advertising
-        Serial.println("[INFO] start advertising");
-        oldDeviceConnected = deviceConnected;
-      }
-      // connecting
-      if (deviceConnected && !oldDeviceConnected) {
-          // do stuff here on connecting
-        oldDeviceConnected = deviceConnected;
-      }
-    
+void loop()
+{
+
+  // notify changed value
+  if (deviceConnected)
+  {
+    temp = thermistor.read();
+    pCharacteristic->setValue(temp);
+    pCharacteristic->notify();
+    Serial.println("[INFO] sent data");
+    delay(TIME_INTERVAL * ms_TO_S_FACTOR);
+  }
+  // disconnecting
+  if (!deviceConnected && oldDeviceConnected)
+  {
+    delay(500);                  // give the bluetooth stack the chance to get things ready
+    pServer->startAdvertising(); // restart advertising
+    Serial.println("[INFO] start advertising");
+    oldDeviceConnected = deviceConnected;
+  }
+  // connecting
+  if (deviceConnected && !oldDeviceConnected)
+  {
+    // do stuff here on connecting
+    oldDeviceConnected = deviceConnected;
+  }
 }
