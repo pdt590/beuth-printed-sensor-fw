@@ -16,6 +16,16 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_LIS3DH.h>
 #include <Adafruit_BME680.h>
+#include <ArduinoJson.h>
+
+//#define DEBUG
+
+#define JSON
+#define KEY_PAIR_NUM 8
+const size_t CAPACITY = JSON_OBJECT_SIZE(KEY_PAIR_NUM);
+StaticJsonDocument<CAPACITY> doc;
+JsonObject object = doc.to<JsonObject>();
+String payload;
 
 // Initialize BLE
 BLEServer *pServer = NULL;
@@ -80,7 +90,7 @@ void setup(void)
 
   // Set up BLE
   // Create the BLE Device
-  String serverName = "ESP32-02";
+  String serverName = "ESP32-01";
   //serverName += String(random(0xffff), HEX);
   BLEDevice::init(serverName.c_str());
 
@@ -165,10 +175,15 @@ void loop()
   // notify changed value
   if (deviceConnected)
   {
-    // Execute sensors
+
+#ifdef JSON
+    // Execute sensors and wrap data in json payload
     // LIS3DH
     sensors_event_t event;
     lis.getEvent(&event);
+    object["ax"] = event.acceleration.x;
+    object["ay"] = event.acceleration.y;
+    object["az"] = event.acceleration.z;
 
     // BME680
     if (!bme.performReading())
@@ -176,10 +191,23 @@ void loop()
       Serial.println("Failed to perform reading :(");
       return;
     }
+    object["temp"] = bme.temperature;
+    object["pres"] = bme.pressure / 100.0;
+    object["hum"] = bme.humidity;
+    object["gas"] = bme.gas_resistance / 1000.0;
+    object["alt"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
+    serializeJson(object, payload);
 
-    pCharacteristic->setValue(0x00);
+    //Serial.println(payload);
+    //Serial.print("Length: ");
+    //Serial.println(payload.length());
+
+    pCharacteristic->setValue(payload.c_str());
     pCharacteristic->notify();
     Serial.println("[INFO] sent data");
+    payload = "";
+#endif
+
     delay(TIME_INTERVAL * ms_TO_S_FACTOR);
   }
   // disconnecting
@@ -197,5 +225,4 @@ void loop()
     oldDeviceConnected = deviceConnected;
   }
 #endif
-
 }
