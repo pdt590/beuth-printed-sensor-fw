@@ -9,9 +9,39 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_LIS3DH.h>
 #include <Adafruit_BME680.h>
+
+// Initialize BLE
+BLEServer *pServer = NULL;
+BLECharacteristic *pCharacteristic = NULL;
+bool deviceConnected = false;
+bool oldDeviceConnected = false;
+
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define ms_TO_S_FACTOR 1000 // Conversion factor for mili seconds to seconds
+#define TIME_INTERVAL 3     // Time interval ESP32 will send data and repeat (in seconds)
+
+class MyServerCallbacks : public BLEServerCallbacks
+{
+  void onConnect(BLEServer *pServer)
+  {
+    deviceConnected = true;
+    Serial.println("[INFO] deviceConnected");
+  };
+
+  void onDisconnect(BLEServer *pServer)
+  {
+    deviceConnected = false;
+    Serial.println("[INFO] deviceDisconnected");
+  }
+};
 
 // Initialize LIS3DH
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
@@ -47,10 +77,46 @@ void setup(void)
   bme.setPressureOversampling(BME680_OS_4X);
   bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
   bme.setGasHeater(320, 150); // 320*C for 150 ms
+
+  // Set up BLE
+  // Create the BLE Device
+  String serverName = "ESP32-02";
+  //serverName += String(random(0xffff), HEX);
+  BLEDevice::init(serverName.c_str());
+
+  // Create the BLE Server
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+
+  // Create the BLE Service
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  // Create a BLE Characteristic
+  pCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE |
+          BLECharacteristic::PROPERTY_NOTIFY |
+          BLECharacteristic::PROPERTY_INDICATE);
+
+  // Create a BLE Descriptor
+  pCharacteristic->addDescriptor(new BLE2902());
+
+  // Start the service
+  pService->start();
+
+  // Start advertising
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(false);
+  pAdvertising->setMinPreferred(0x0); // set value to 0x00 to not advertise this parameter
+  BLEDevice::startAdvertising();
+  Serial.println("[INFO] waiting a client connection to notify...");
 }
 
 void loop()
 {
+#ifdef DEBUG
   // LIS3DH displays values (acceleration is measured in m/s^2)
   sensors_event_t event;
   lis.getEvent(&event);
@@ -94,4 +160,42 @@ void loop()
 
   // delay
   delay(2000);
+#else
+
+  // notify changed value
+  if (deviceConnected)
+  {
+    // Execute sensors
+    // LIS3DH
+    sensors_event_t event;
+    lis.getEvent(&event);
+
+    // BME680
+    if (!bme.performReading())
+    {
+      Serial.println("Failed to perform reading :(");
+      return;
+    }
+
+    pCharacteristic->setValue(0x00);
+    pCharacteristic->notify();
+    Serial.println("[INFO] sent data");
+    delay(TIME_INTERVAL * ms_TO_S_FACTOR);
+  }
+  // disconnecting
+  if (!deviceConnected && oldDeviceConnected)
+  {
+    delay(500);                  // give the bluetooth stack the chance to get things ready
+    pServer->startAdvertising(); // restart advertising
+    Serial.println("[INFO] start advertising");
+    oldDeviceConnected = deviceConnected;
+  }
+  // connecting
+  if (deviceConnected && !oldDeviceConnected)
+  {
+    // do stuff here on connecting
+    oldDeviceConnected = deviceConnected;
+  }
+#endif
+
 }
