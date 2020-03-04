@@ -19,8 +19,9 @@
 #include <ArduinoJson.h>
 
 //#define DEBUG
-
+//#define DEV
 #define JSON
+
 #define KEY_PAIR_NUM 8
 const size_t CAPACITY = JSON_OBJECT_SIZE(KEY_PAIR_NUM);
 StaticJsonDocument<CAPACITY> doc;
@@ -43,13 +44,17 @@ class MyServerCallbacks : public BLEServerCallbacks
   void onConnect(BLEServer *pServer)
   {
     deviceConnected = true;
+#if defined(DEBUG) || defined(DEV)
     Serial.println("[INFO] deviceConnected");
+#endif
   };
 
   void onDisconnect(BLEServer *pServer)
   {
     deviceConnected = false;
+#if defined(DEBUG) || defined(DEV)
     Serial.println("[INFO] deviceDisconnected");
+#endif
   }
 };
 
@@ -62,21 +67,29 @@ Adafruit_BME680 bme;
 
 void setup(void)
 {
+#if defined(DEBUG) || defined(DEV)
   Serial.begin(9600);
   while (!Serial)
     delay(10); // will pause until serial console opens
+#endif
 
+#if defined(DEBUG) || defined(DEV)
   Serial.println("LIS3DH & BME680 starting...!");
+#endif
 
   // LIS3DH supports 0x18 (default) or 0x19 address
   // BME680 supports 0x77 (default) or 0x76 address
   if (!lis.begin(0x18) || !bme.begin(0x77))
   {
+#if defined(DEBUG) || defined(DEV)
     Serial.println("Couldn't start...");
+#endif
     while (1)
       yield();
   }
+#if defined(DEBUG) || defined(DEV)
   Serial.println("LIS3DH & BME680 found!");
+#endif
 
   // Set up LIS3DH (accelerometer range)
   lis.setRange(LIS3DH_RANGE_4_G); // 2, 4, 8 or 16 G!
@@ -121,12 +134,14 @@ void setup(void)
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0); // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
+#if defined(DEBUG) || defined(DEV)
   Serial.println("[INFO] waiting a client connection to notify...");
+#endif
 }
 
 void loop()
 {
-#ifdef DEBUG
+#if defined(DEBUG)
   // LIS3DH displays values (acceleration is measured in m/s^2)
   sensors_event_t event;
   lis.getEvent(&event);
@@ -188,7 +203,9 @@ void loop()
     // BME680
     if (!bme.performReading())
     {
+#ifdef DEV
       Serial.println("Failed to perform reading :(");
+#endif
       return;
     }
     object["temp"] = bme.temperature;
@@ -197,14 +214,17 @@ void loop()
     object["gas"] = bme.gas_resistance / 1000.0;
     object["alt"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
     serializeJson(object, payload);
-
-    //Serial.println(payload);
-    //Serial.print("Length: ");
-    //Serial.println(payload.length());
+#ifdef DEV
+    Serial.println(payload);
+    Serial.print("Length: ");
+    Serial.println(payload.length());
+#endif
 
     pCharacteristic->setValue(payload.c_str());
     pCharacteristic->notify();
+#ifdef DEV
     Serial.println("[INFO] sent data");
+#endif
     payload = "";
 #endif
 
@@ -215,7 +235,9 @@ void loop()
   {
     delay(500);                  // give the bluetooth stack the chance to get things ready
     pServer->startAdvertising(); // restart advertising
+#ifdef DEV
     Serial.println("[INFO] start advertising");
+#endif
     oldDeviceConnected = deviceConnected;
   }
   // connecting
