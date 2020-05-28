@@ -213,14 +213,14 @@ void loop()
     object["hum"] = bme.humidity;
     object["gas"] = bme.gas_resistance / 1000.0;
     object["alt"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
-    serializeJson(object, payload);
+    serializeJson(object, payload); // create a minified JSON document
 #ifdef DEV
     Serial.println(payload);
     Serial.print("Length: ");
     Serial.println(payload.length());
 #endif
 
-    pCharacteristic->setValue(payload.c_str());
+    pCharacteristic->setValue(payload.c_str()); // convert JSON to char and send
     pCharacteristic->notify();
 #ifdef DEV
     Serial.println("[INFO] sent data");
