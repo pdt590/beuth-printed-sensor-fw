@@ -29,6 +29,7 @@ JsonObject object = doc.to<JsonObject>();
 String payload;
 
 // Initialize BLE
+String serverName;
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
 bool deviceConnected = false;
@@ -103,7 +104,7 @@ void setup(void)
 
   // Set up BLE
   // Create the BLE Device
-  String serverName = "ESP32-01";
+  serverName = "ESP32-01";
   //serverName += String(random(0xffff), HEX);
   BLEDevice::init(serverName.c_str());
 
@@ -193,6 +194,9 @@ void loop()
 
 #ifdef JSON
     // Execute sensors and wrap data in json payload
+    // Device Name
+    object["name"] = serverName;
+
     // LIS3DH
     sensors_event_t event;
     lis.getEvent(&event);
