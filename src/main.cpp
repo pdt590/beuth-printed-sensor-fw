@@ -195,7 +195,7 @@ void loop()
 #ifdef JSON
     // Execute sensors and wrap data in json payload
     // Device Name
-    object["name"] = serverName;
+    object["name"] = serverName.c_str();
 
     // LIS3DH
     sensors_event_t event;
