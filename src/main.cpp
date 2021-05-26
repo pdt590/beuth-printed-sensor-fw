@@ -18,9 +18,9 @@
 #include <Adafruit_BME680.h>
 #include <ArduinoJson.h>
 
-//#define DEBUG
-//#define DEV
-#define JSON
+#define TEST
+//#define RELEASE
+//#define RELEASE_LOG
 
 #define KEY_PAIR_NUM 8
 const size_t CAPACITY = JSON_OBJECT_SIZE(KEY_PAIR_NUM);
@@ -29,7 +29,7 @@ JsonObject object = doc.to<JsonObject>();
 String payload;
 
 // Initialize BLE
-String serverName;
+String serverId;
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
 bool deviceConnected = false;
@@ -38,14 +38,14 @@ bool oldDeviceConnected = false;
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define ms_TO_S_FACTOR 1000 // Conversion factor for mili seconds to seconds
-#define TIME_INTERVAL 3     // Time interval ESP32 will send data and repeat (in seconds)
+#define TIME_INTERVAL 5     // Time interval ESP32 will send data and repeat (in seconds)
 
 class MyServerCallbacks : public BLEServerCallbacks
 {
   void onConnect(BLEServer *pServer)
   {
     deviceConnected = true;
-#if defined(DEBUG) || defined(DEV)
+#if defined(TEST) || defined(RELEASE_LOG)
     Serial.println("[INFO] deviceConnected");
 #endif
   };
@@ -53,11 +53,19 @@ class MyServerCallbacks : public BLEServerCallbacks
   void onDisconnect(BLEServer *pServer)
   {
     deviceConnected = false;
-#if defined(DEBUG) || defined(DEV)
+#if defined(TEST) || defined(RELEASE_LOG)
     Serial.println("[INFO] deviceDisconnected");
 #endif
   }
 };
+
+// Initialize Moisture Sensor
+#define MOISTURE_ADC_PIN 34
+#define LED_PIN 2
+const int AirValue = 3480;
+const int WaterValue = 1655;
+int moistureValue = 0;
+int moisturePercent = 0;
 
 // Initialize LIS3DH
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
@@ -68,27 +76,30 @@ Adafruit_BME680 bme;
 
 void setup(void)
 {
-#if defined(DEBUG) || defined(DEV)
+#if defined(TEST) || defined(RELEASE_LOG)
   Serial.begin(9600);
   while (!Serial)
     delay(10); // will pause until serial console opens
 #endif
 
-#if defined(DEBUG) || defined(DEV)
+#if defined(TEST) || defined(RELEASE_LOG)
   Serial.println("LIS3DH & BME680 starting...!");
 #endif
+
+  // Set Indicate Pin mode
+  pinMode(LED_PIN, OUTPUT);
 
   // LIS3DH supports 0x18 (default) or 0x19 address
   // BME680 supports 0x77 (default) or 0x76 address
   if (!lis.begin(0x18) || !bme.begin(0x77))
   {
-#if defined(DEBUG) || defined(DEV)
+#if defined(TEST) || defined(RELEASE_LOG)
     Serial.println("Couldn't start...");
 #endif
     while (1)
       yield();
   }
-#if defined(DEBUG) || defined(DEV)
+#if defined(TEST) || defined(RELEASE_LOG)
   Serial.println("LIS3DH & BME680 found!");
 #endif
 
@@ -104,9 +115,10 @@ void setup(void)
 
   // Set up BLE
   // Create the BLE Device
-  serverName = "ESP32-01";
-  //serverName += String(random(0xffff), HEX);
-  BLEDevice::init(serverName.c_str());
+  serverId = "Clip-0001";
+  // TODO should be fixed
+  //serverId += String(random(0xffff), HEX);
+  BLEDevice::init(serverId.c_str());
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -135,26 +147,43 @@ void setup(void)
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0); // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
-#if defined(DEBUG) || defined(DEV)
+#if defined(TEST) || defined(RELEASE_LOG)
   Serial.println("[INFO] waiting a client connection to notify...");
 #endif
 }
 
 void loop()
 {
-#if defined(DEBUG)
+#if defined(TEST)
+  // MOISTURE
+  moistureValue = analogRead(MOISTURE_ADC_PIN);
+  moisturePercent = map(moistureValue, AirValue, WaterValue, 0, 100);
+  Serial.print("Mois = ");
+  if (moisturePercent >= 100)
+  {
+    Serial.println("100 %");
+  }
+  else if (moisturePercent <= 0)
+  {
+    Serial.println("0 %");
+  }
+  else if (moisturePercent > 0 && moisturePercent < 100)
+  {
+    Serial.print(moisturePercent);
+    Serial.println("%");
+  }
+
   // LIS3DH displays values (acceleration is measured in m/s^2)
   sensors_event_t event;
   lis.getEvent(&event);
-  Serial.print("\t\tX: ");
+  Serial.print("Axis = ");
+  Serial.print(" X: ");
   Serial.print(event.acceleration.x);
-  Serial.print(" \tY: ");
+  Serial.print(" Y: ");
   Serial.print(event.acceleration.y);
-  Serial.print(" \tZ: ");
+  Serial.print(" Z: ");
   Serial.print(event.acceleration.z);
   Serial.println(" m/s^2 ");
-
-  Serial.println();
 
   // BME680 displays values
   if (!bme.performReading())
@@ -185,17 +214,38 @@ void loop()
   Serial.println();
 
   // delay
-  delay(2000);
+  delay(5000);
 #else
 
   // notify changed value
   if (deviceConnected)
   {
 
-#ifdef JSON
+#ifdef RELEASE
     // Execute sensors and wrap data in json payload
-    // Device Name
-    object["name"] = serverName.c_str();
+    // Device ID
+    object["id"] = serverId.c_str();
+
+    // MOISTURE
+    moistureValue = analogRead(MOISTURE_ADC_PIN);
+    moisturePercent = map(moistureValue, AirValue, WaterValue, 0, 100);
+    if (moisturePercent >= 100)
+    {
+      moisturePercent = 100;
+    }
+    else if (moisturePercent <= 0)
+    {
+      moisturePercent = 0;
+    }
+    object["mois"] = moisturePercent;
+    if (moisturePercent > 15)
+    {
+      digitalWrite(LED_PIN, HIGH);
+    }
+    else
+    {
+      digitalWrite(LED_PIN, LOW);
+    }
 
     // LIS3DH
     sensors_event_t event;
@@ -207,18 +257,18 @@ void loop()
     // BME680
     if (!bme.performReading())
     {
-#ifdef DEV
+#ifdef RELEASE_LOG
       Serial.println("Failed to perform reading :(");
 #endif
       return;
     }
     object["temp"] = bme.temperature;
-    object["pres"] = bme.pressure / 100.0;
+    //object["pres"] = bme.pressure / 100.0;
     object["hum"] = bme.humidity;
     object["gas"] = bme.gas_resistance / 1000.0;
-    object["alt"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
+    //object["alt"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
     serializeJson(object, payload); // create a minified JSON document
-#ifdef DEV
+#ifdef RELEASE_LOG
     Serial.println(payload);
     Serial.print("Length: ");
     Serial.println(payload.length());
@@ -226,7 +276,7 @@ void loop()
 
     pCharacteristic->setValue(payload.c_str()); // convert JSON to char and send
     pCharacteristic->notify();
-#ifdef DEV
+#ifdef RELEASE_LOG
     Serial.println("[INFO] sent data");
 #endif
     payload = "";
@@ -239,7 +289,7 @@ void loop()
   {
     delay(500);                  // give the bluetooth stack the chance to get things ready
     pServer->startAdvertising(); // restart advertising
-#ifdef DEV
+#ifdef RELEASE_LOG
     Serial.println("[INFO] start advertising");
 #endif
     oldDeviceConnected = deviceConnected;
