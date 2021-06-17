@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
+#include <WiFi.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -18,8 +19,8 @@
 #include <Adafruit_BME680.h>
 #include <ArduinoJson.h>
 
-#define TEST
-//#define RELEASE
+//#define TEST
+#define RELEASE
 //#define RELEASE_LOG
 
 #define KEY_PAIR_NUM 8
@@ -29,6 +30,7 @@ JsonObject object = doc.to<JsonObject>();
 String payload;
 
 // Initialize BLE
+String serverPrefix = "Clip-";
 String serverId;
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
@@ -61,11 +63,9 @@ class MyServerCallbacks : public BLEServerCallbacks
 
 // Initialize Moisture Sensor
 #define MOISTURE_ADC_PIN 34
-#define LED_PIN 2
-const int AirValue = 3480;
-const int WaterValue = 1655;
-int moistureValue = 0;
-int moisturePercent = 0;
+const int AirValue = 0;   // TODO - max 4095 (12 bits ADC)
+const int WaterValue = 0; // TODO
+int wetValue = 0;
 
 // Initialize LIS3DH
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
@@ -85,9 +85,6 @@ void setup(void)
 #if defined(TEST) || defined(RELEASE_LOG)
   Serial.println("LIS3DH & BME680 starting...!");
 #endif
-
-  // Set Indicate Pin mode
-  pinMode(LED_PIN, OUTPUT);
 
   // LIS3DH supports 0x18 (default) or 0x19 address
   // BME680 supports 0x77 (default) or 0x76 address
@@ -114,10 +111,12 @@ void setup(void)
   bme.setGasHeater(320, 150); // 320*C for 150 ms
 
   // Set up BLE
-  // Create the BLE Device
-  serverId = "Clip-0001";
-  // TODO should be fixed
-  //serverId += String(random(0xffff), HEX);
+  serverId = serverPrefix + WiFi.macAddress()[9] +
+             WiFi.macAddress()[10] +
+             WiFi.macAddress()[12] +
+             WiFi.macAddress()[13] +
+             WiFi.macAddress()[15] +
+             WiFi.macAddress()[16];
   BLEDevice::init(serverId.c_str());
 
   // Create the BLE Server
@@ -156,20 +155,20 @@ void loop()
 {
 #if defined(TEST)
   // MOISTURE
-  moistureValue = analogRead(MOISTURE_ADC_PIN);
-  moisturePercent = map(moistureValue, AirValue, WaterValue, 0, 100);
-  Serial.print("Mois = ");
-  if (moisturePercent >= 100)
+  wetValue = analogRead(MOISTURE_ADC_PIN);
+  wetPercent = map(moistureValue, AirValue, WaterValue, 0, 100);
+  Serial.print("Wet = ");
+  if (wetPercent >= 100)
   {
     Serial.println("100 %");
   }
-  else if (moisturePercent <= 0)
+  else if (wetPercent <= 0)
   {
     Serial.println("0 %");
   }
-  else if (moisturePercent > 0 && moisturePercent < 100)
+  else if (wetPercent > 0 && wetPercent < 100)
   {
-    Serial.print(moisturePercent);
+    Serial.print(wetPercent);
     Serial.println("%");
   }
 
@@ -214,7 +213,7 @@ void loop()
   Serial.println();
 
   // delay
-  delay(5000);
+  delay(TIME_INTERVAL * ms_TO_S_FACTOR);
 #else
 
   // notify changed value
@@ -227,25 +226,8 @@ void loop()
     object["id"] = serverId.c_str();
 
     // MOISTURE
-    moistureValue = analogRead(MOISTURE_ADC_PIN);
-    moisturePercent = map(moistureValue, AirValue, WaterValue, 0, 100);
-    if (moisturePercent >= 100)
-    {
-      moisturePercent = 100;
-    }
-    else if (moisturePercent <= 0)
-    {
-      moisturePercent = 0;
-    }
-    object["mois"] = moisturePercent;
-    if (moisturePercent > 15)
-    {
-      digitalWrite(LED_PIN, HIGH);
-    }
-    else
-    {
-      digitalWrite(LED_PIN, LOW);
-    }
+    wetValue = analogRead(MOISTURE_ADC_PIN);
+    object["wet"] = wetValue;
 
     // LIS3DH
     sensors_event_t event;
@@ -263,10 +245,11 @@ void loop()
       return;
     }
     object["temp"] = bme.temperature;
-    //object["pres"] = bme.pressure / 100.0;
-    object["hum"] = bme.humidity;
     object["gas"] = bme.gas_resistance / 1000.0;
+    //object["pres"] = bme.pressure / 100.0;
     //object["alt"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
+    //object["hum"] = bme.humidity;
+
     serializeJson(object, payload); // create a minified JSON document
 #ifdef RELEASE_LOG
     Serial.println(payload);
