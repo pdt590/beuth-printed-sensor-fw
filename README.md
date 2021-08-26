@@ -4,7 +4,7 @@ ESP32 application for PrintED project using BLE
 
 ## Compatibility
 
-- [beuth-printed-sensor-fw](https://github.com/pdthang/beuth-esp32-ble)
+- [beuth-printed-sensor-fw](https://github.com/pdt590/beuth-printed-sensor-fw)
 - [beuth-printed-sensor-hw](https://github.com/pdt590/beuth-printed-sensor-hw)
 - [beuth-printed-app](https://github.com/pdt590/beuth-printed-app)
 - [beuth-printed-gateway](https://github.com/pdt590/beuth-printed-gateway)
