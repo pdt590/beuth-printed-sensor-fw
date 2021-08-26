@@ -156,21 +156,8 @@ void loop()
 #if defined(TEST)
   // MOISTURE
   wetValue = analogRead(MOISTURE_ADC_PIN);
-  wetPercent = map(moistureValue, AirValue, WaterValue, 0, 100);
-  Serial.print("Wet = ");
-  if (wetPercent >= 100)
-  {
-    Serial.println("100 %");
-  }
-  else if (wetPercent <= 0)
-  {
-    Serial.println("0 %");
-  }
-  else if (wetPercent > 0 && wetPercent < 100)
-  {
-    Serial.print(wetPercent);
-    Serial.println("%");
-  }
+  Serial.print(wetValue);
+  Serial.println(" ADC");
 
   // LIS3DH displays values (acceleration is measured in m/s^2)
   sensors_event_t event;
